@@ -10,7 +10,7 @@ use FindBin qw($Bin);  # Where was this script installed?
 use lib "$Bin/.."; # Add .. to @INC;
 use Data::Dumper;
 
-use Refactor;
+use Devel::Refactor;
 
 ## Parse options
 my ($verbose);

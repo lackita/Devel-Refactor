@@ -1,5 +1,8 @@
 Revision history for Perl extension Devel::Refactor.
 
+0.6 Thu Dec 12 19:46:37 2013
+    - Moving structure to a more conventional CPAN package.
+
 0.5 Thu March 17 14:47:00 PST 2005
     + Fixed example/factory.pl to work with latest version of Refactor.
 
