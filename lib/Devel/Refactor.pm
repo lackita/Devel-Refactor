@@ -454,6 +454,7 @@ sub _parse_vars {
         }
     }
 
+	return %vars;
 }
 
 sub _parse_local_vars {
