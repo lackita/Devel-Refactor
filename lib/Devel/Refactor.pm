@@ -172,16 +172,14 @@ sub extract_subroutine {
     $self->{sub_name} = $sub_name;
     $self->{code_snippet}  = $code_snippet;
 
-	my $extract_method = Devel::Refactor::ExtractMethod->new();
-
-    $self->_parse_vars($code_snippet);
-    $self->_parse_local_vars();
-    $self->_transform_snippet();
+    my %vars = Devel::Refactor::ExtractMethod::_parse_vars($code_snippet);
+    my $local_and_loop_vars = Devel::Refactor::ExtractMethod::_parse_local_vars($code_snippet, \%vars);
+    my ($return_sub_call, $return_snippet) = $self->_transform_snippet($sub_name, $code_snippet, \%vars, $local_and_loop_vars->{local}, $local_and_loop_vars->{loop});
 
      if ($syntax_check) {
          $self->_syntax_check();
      }
-     return (  @$self{'return_sub_call','return_snippet'}   );
+     return ($return_sub_call, $return_snippet);
 }
 
 =head2 rename_subroutine($where,$old_name,$new_name,[$max_depth])
@@ -436,20 +434,15 @@ sub _parse_vars {
         $hint = $2;
         if ( $hint =~ /^{/ ) {    #}/ 
             $var =~ s/\$/\%/;
-            $self->{hash_vars}->{$var}++;
 			$vars{hash}{$var}++;
         } elsif ( $hint =~ /^\[>/ ) {
             $var =~ s/\$/\@/;
-            $self->{array_vars}->{$var}++;
 			$vars{array}{$var}++;
         } elsif ( $var =~ /^\@/ ){
-            $self->{array_vars}->{$var}++;
 			$vars{array}{$var}++;
         } elsif ( $var =~ /^\%/ ) {
-            $self->{hash_vars}->{$var}++;
 			$vars{hash}{$var}++;
         } else {
-            $self->{scalar_vars}->{$var}++;
 			$vars{scalar}{$var}++;
         }
     }
@@ -458,48 +451,54 @@ sub _parse_vars {
 }
 
 sub _parse_local_vars {
-    my $self = shift;
+    my ($self, $code_snippet, $vars) = @_;
 
     my $reg;
     my $reg2;
     my $reg3;   # To find loops variables declared in for and foreach
+	my %local_vars;
+	my %loop_vars;
 
     # figure out which are declared in the snippet
-    foreach my $var ( keys %{ $self->{scalar_vars} } ) {
+    foreach my $var ( keys %{ $vars->{scalar} } ) {
         $reg  = "\\s*my\\s*\\$var\\s*[=;\(]";
         $reg2 = "\\s*my\\s*\\(.*?\\$var.*?\\)";
         $reg3 = "(?:for|foreach)\\s+my\\s*\\$var\\s*\\(";
 
         if ( $var =~ /(?:\$\d+$|\$[ab]$)/ ) {
-            $self->{local_scalars}->{$var}++;
-        } elsif ( $self->{code_snippet} =~ /$reg|$reg2/ ) {
-            $self->{local_scalars}->{$var}++;
+			$local_vars{scalar}{$var}++;
+        } elsif ( $code_snippet =~ /$reg|$reg2/ ) {
+			$local_vars{scalar}{$var}++;
             # skip loop variables
-            if ( $self->{code_snippet} =~ /$reg3/ ) {
-                $self->{loop_scalars}->{$var}++;
+            if ( $code_snippet =~ /$reg3/ ) {
+				$loop_vars{scalar}{$var}++;
             }
         }
     }
-    foreach my $var ( keys %{ $self->{array_vars}} ) {
+    foreach my $var ( keys %{ $vars->{array}} ) {
         $var =~ s/\$/\@/;
         $reg  = "\\s*my\\s*\\$var\\s*[=;\(]";
         $reg2 = "\\s*my\\s*\\(.*?\\$var.*?\\)";
 
-        if ( $self->{code_snippet} =~ /$reg|$reg2/ ) {
-            $self->{local_arrays}->{$var}++;
+        if ( $code_snippet =~ /$reg|$reg2/ ) {
+			$local_vars{array}{$var}++;
         }
 
     }
-    foreach my $var ( keys %{ $self->{hash_vars}} ) {
+    foreach my $var ( keys %{ $vars->{hash}} ) {
         $var =~ s/\$/\%/;
         $reg  = "\\s*my\\s*\\$var\\s*[=;\(]";
         $reg2 = "\\s*my\\s*\\(.*?\\$var.*?\\)";
 
-        if ( $self->{code_snippet} =~ /$reg|$reg2/ ) {
-            $self->{local_hashes}->{$var}++;
+        if ( $code_snippet =~ /$reg|$reg2/ ) {
+			$local_vars{hash}{$var}++;
         }
     }
 
+	return {
+		local => \%local_vars,
+		loop => \%loop_vars,
+	};
 }
 
 
@@ -534,95 +533,99 @@ sub _syntax_check{
 }
 
 sub _transform_snippet {
-    my $self = shift;
+    my ($self, $sub_name, $code_snippet, $vars, $local_vars, $loop_vars) = @_;
 
     my $reg;
     my $reg2;
     my $arref;
     my $href;
+	my @parms;
+	my @inner_retvals;
+	my @outer_retvals;
+
     # Create a sub call that accepts all non-locally declared
     # vars as parameters
-    foreach my $parm ( keys %{$self->{scalar_vars} } ) {
-        if ( !defined( $self->{local_scalars}->{$parm} ) ) {
-            push @{$self->{parms}}, $parm;
+    foreach my $parm ( keys %{$vars->{scalar} } ) {
+        if ( !defined( $local_vars->{scalar}{$parm} ) ) {
+			push @parms, $parm;
         } else {
             # Don't return loop variables
-            next if grep $parm eq $_, keys %{$self->{loop_scalars}};
+            next if grep $parm eq $_, keys %{$loop_vars->{scalar}};
             if ( $parm !~ /\$\d+$/ ) {
-                push @{$self->{inner_retvals}}, $parm;
-                push @{$self->{outer_retvals}}, $parm;
+				push @inner_retvals, $parm;
+				push @outer_retvals, $parm;
             }
         }
     }
-    foreach my $parm ( keys %{ $self->{array_vars}} ) {
+    foreach my $parm ( keys %{ $vars->{array}} ) {
         $parm =~ s/\$/\@/;
 
-        if ( !defined( $self->{local_arrays}->{$parm} ) ) {
-            push @{$self->{parms}}, $parm;
+        if ( !defined( $local_vars->{array}->{$parm} ) ) {
+			push @parms, $parm;
             $reg2 = "\\$parm";
             ($arref = $parm) =~ s/\@/\$/;
-            $self->{code_snippet} =~ s/$reg2/\@$arref/g;
+            $code_snippet =~ s/$reg2/\@$arref/g;
 
             $parm =~ s/\@/\$/;
             $reg = "\\$parm\\[";
 
-            $self->{code_snippet} =~ s/$reg/$parm\-\>\[/g;
+            $code_snippet =~ s/$reg/$parm\-\>\[/g;
 
 
         } else {
-            push @{$self->{inner_retvals}}, "\\$parm"; # \@array
-            push @{$self->{outer_retvals}}, "$parm";
+			push @inner_retvals, "\\$parm"; # \@array
+			push @outer_retvals, $parm;
         }
     }
-    foreach my $parm ( keys %{ $self->{hash_vars} }  ) {
+    foreach my $parm ( keys %{ $vars->{hash} }  ) {
         $parm =~ s/\$/\%/;
 
-        if ( !defined( $self->{local_hashes}->{$parm} ) ) {
-            push @{$self->{parms}}, $parm;
+        if ( !defined( $local_vars->{hash}->{$parm} ) ) {
+			push @parms, $parm;
             $reg2 = "\\$parm";
             ($href = $parm) =~ s/\%/\$/;
-            $self->{code_snippet} =~ s/$reg2/\%$href/g;
-            
+            $code_snippet =~ s/$reg2/\%$href/g;
+
             $parm =~ s/\%/\$/;
             $reg = "\\$parm\\{";
 
-            $self->{code_snippet} =~ s/$reg/$parm\-\>\{/g;
+            $code_snippet =~ s/$reg/$parm\-\>\{/g;
         } else {
-            push @{$self->{inner_retvals}}, "\\$parm";  # \%hash
-            push @{$self->{outer_retvals}}, "$parm";
+			push @inner_retvals, "\\$parm"; # \%hash
+			push @outer_retvals, $parm;
         }
     }
     my $retval;
     my $return_call;
     my $tmp;
 
-	if (scalar(@{$self->{outer_retvals}}) > 0) {
+	if (scalar(@outer_retvals) > 0) {
 		$return_call .= "my ";
-		$return_call .= "(" if scalar(@{$self->{outer_retvals}}) > 1;
-		$return_call .= join ', ', map {my $tmp; ($tmp = $_) =~ s/[\@\%](.*)/\$$1/; $tmp} sort @{$self->{outer_retvals}};
-		$return_call .= ")" if scalar(@{$self->{outer_retvals}}) > 1;
+		$return_call .= "(" if scalar(@outer_retvals) > 1;
+		$return_call .= join ', ', map {my $tmp; ($tmp = $_) =~ s/[\@\%](.*)/\$$1/; $tmp} sort @outer_retvals;
+		$return_call .= ")" if scalar(@outer_retvals) > 1;
 		$return_call .= " = ";
 	}
-	$return_call .= $self->{sub_name}." (";
+	$return_call .= "$sub_name (";
     $return_call .= join ', ',
-         map { ( $tmp = $_ ) =~ s/(\%|\@)(.*)/\\$1$2/; $tmp } @{$self->{parms}};
+         map { ( $tmp = $_ ) =~ s/(\%|\@)(.*)/\\$1$2/; $tmp } @parms;
     $return_call .= ");\n";
     
-    $retval  = "sub ".$self->{sub_name}." {\n";
+    $retval  = "sub $sub_name {\n";
 	$retval .= "\tmy (" . join(',', map {
 		($tmp = $_) =~ tr/%@/$/;$tmp
-	} @{$self->{parms}}) . ") = \@_;\n" if scalar(@{$self->{parms}} > 0);
+	} @parms) . ") = \@_;\n" if scalar(@parms > 0);
 
-	if (scalar(@{$self->{outer_retvals}}) > 0 && scalar(@{$self->{parms}}) > 0) {
+	if (scalar(@outer_retvals) > 0 && scalar(@parms) > 0) {
 		$retval .= "\n";
 	}
 
-    $retval .= join("", map {"\t$_\n"} split /\n/, $self->{code_snippet});
-	if (scalar(@{$self->{outer_retvals}} > 0)) {
+    $retval .= join("", map {"\t$_\n"} split /\n/, $code_snippet);
+	if (scalar(@outer_retvals > 0)) {
 		$retval .= "\treturn ";
-		$retval .= "(" if scalar(@{$self->{outer_retvals}}) > 1;
-		$retval .= join ', ', sort @{$self->{inner_retvals}};
-		$retval .= ")" if scalar(@{$self->{outer_retvals}}) > 1;
+		$retval .= "(" if scalar(@outer_retvals) > 1;
+		$retval .= join ', ', sort @inner_retvals;
+		$retval .= ")" if scalar(@outer_retvals) > 1;
 		$retval .= ";\n";
 	}
     $retval .= "}\n";
@@ -634,6 +637,7 @@ sub _transform_snippet {
 
     $self->{return_snippet} = $retval;
     $self->{return_sub_call} = $return_call;
+	return ($return_call, $retval);
 }
 
 
