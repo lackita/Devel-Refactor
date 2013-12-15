@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 use Data::Dumper;
-use Devel::Refactor; 
+use Devel::Refactor;
 
 $|++;
 

@@ -41,35 +41,14 @@ package Devel::Refactor;
 
 use strict;
 use warnings;
+
 use Cwd;
+use Devel::Refactor::ExtractMethod;
 use File::Basename;
 
-require Exporter;
-
-our @ISA = qw(Exporter);
-
-# Items to export into callers namespace by default. Note: do not export
-# names by default without a very good reason. Use EXPORT_OK instead.
-# Do not simply export all your public functions/methods/constants.
-
-# This allows declaration	use Dev::Refactor ':all';
-# If you do not need this, moving things directly into @EXPORT or @EXPORT_OK
-# will save memory.
-our %EXPORT_TAGS = ( 'all' => [ qw(
-	
-) ] );
-
-our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
-
-our @EXPORT = qw(
-	
-);
-
-our $VERSION = '0.05'; 
+our $VERSION = '0.06';
 
 our $DEBUG = 0;
-# Preloaded methods go here.
-
 
 our %perl_file_extensions = (
     '\.pl$' => 1,
@@ -192,8 +171,10 @@ sub extract_subroutine {
     $DEBUG and print STDERR "snippet  : $code_snippet\n";
     $self->{sub_name} = $sub_name;
     $self->{code_snippet}  = $code_snippet;
-        
-    $self->_parse_vars();
+
+	my $extract_method = Devel::Refactor::ExtractMethod->new();
+
+    $self->_parse_vars($code_snippet);
     $self->_parse_local_vars();
     $self->_transform_snippet();
 
@@ -442,28 +423,34 @@ sub perl_file_extensions {
 ############################## Utility Methods ####################################
 
 sub _parse_vars {
-    my $self = shift;
+    my ($self, $code_snippet) = @_;
 
     my $var;
     my $hint;
+	my %vars;
 
     # find the variables
-    while ( $self->{code_snippet} =~ /([\$\@]\w+?)(\W\W)/g ) {
+    while ( $code_snippet =~ /([\$\@]\w+?)(\W{1,2})/g ) {
 
         $var  = $1;
         $hint = $2;
         if ( $hint =~ /^{/ ) {    #}/ 
             $var =~ s/\$/\%/;
             $self->{hash_vars}->{$var}++;
+			$vars{hash}{$var}++;
         } elsif ( $hint =~ /^\[>/ ) {
             $var =~ s/\$/\@/;
             $self->{array_vars}->{$var}++;
+			$vars{array}{$var}++;
         } elsif ( $var =~ /^\@/ ){
             $self->{array_vars}->{$var}++;
+			$vars{array}{$var}++;
         } elsif ( $var =~ /^\%/ ) {
             $self->{hash_vars}->{$var}++;
+			$vars{hash}{$var}++;
         } else {
             $self->{scalar_vars}->{$var}++;
+			$vars{scalar}{$var}++;
         }
     }
 
@@ -574,13 +561,13 @@ sub _transform_snippet {
             $reg2 = "\\$parm";
             ($arref = $parm) =~ s/\@/\$/;
             $self->{code_snippet} =~ s/$reg2/\@$arref/g;
-            
+
             $parm =~ s/\@/\$/;
             $reg = "\\$parm\\[";
 
             $self->{code_snippet} =~ s/$reg/$parm\-\>\[/g;
 
-                        
+
         } else {
             push @{$self->{inner_retvals}}, "\\$parm"; # \@array
             push @{$self->{outer_retvals}}, "$parm";
@@ -607,20 +594,36 @@ sub _transform_snippet {
     my $retval;
     my $return_call;
     my $tmp;
-    
-    $return_call .= "my (";
-    $return_call .= join ', ', map {my $tmp; ($tmp = $_) =~ s/[\@\%](.*)/\$$1/; $tmp} sort @{$self->{outer_retvals}};
-    $return_call .= ") = ".$self->{sub_name}." (";
+
+	if (scalar(@{$self->{outer_retvals}}) > 0) {
+		$return_call .= "my ";
+		$return_call .= "(" if scalar(@{$self->{outer_retvals}}) > 1;
+		$return_call .= join ', ', map {my $tmp; ($tmp = $_) =~ s/[\@\%](.*)/\$$1/; $tmp} sort @{$self->{outer_retvals}};
+		$return_call .= ")" if scalar(@{$self->{outer_retvals}}) > 1;
+		$return_call .= " = ";
+	}
+	$return_call .= $self->{sub_name}." (";
     $return_call .= join ', ',
          map { ( $tmp = $_ ) =~ s/(\%|\@)(.*)/\\$1$2/; $tmp } @{$self->{parms}};
     $return_call .= ");\n";
     
     $retval  = "sub ".$self->{sub_name}." {\n";
-    $retval .= join '', map {($tmp = $_) =~ tr/%@/$/; "    my $tmp = shift;\n" } @{$self->{parms}};
-    $retval .= "\n" . $self->{code_snippet};
-    $retval .= "\n    return (";
-    $retval .= join ', ', sort @{$self->{inner_retvals}};
-    $retval .= ");\n";
+	$retval .= "\tmy (" . join(',', map {
+		($tmp = $_) =~ tr/%@/$/;$tmp
+	} @{$self->{parms}}) . ") = \@_;\n" if scalar(@{$self->{parms}} > 0);
+
+	if (scalar(@{$self->{outer_retvals}}) > 0 && scalar(@{$self->{parms}}) > 0) {
+		$retval .= "\n";
+	}
+
+    $retval .= join("", map {"\t$_\n"} split /\n/, $self->{code_snippet});
+	if (scalar(@{$self->{outer_retvals}} > 0)) {
+		$retval .= "\treturn ";
+		$retval .= "(" if scalar(@{$self->{outer_retvals}}) > 1;
+		$retval .= join ', ', sort @{$self->{inner_retvals}};
+		$retval .= ")" if scalar(@{$self->{outer_retvals}}) > 1;
+		$retval .= ";\n";
+	}
     $retval .= "}\n";
 
     # protect quotes and dollar signs
