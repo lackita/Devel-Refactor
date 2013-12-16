@@ -30,7 +30,7 @@ my $code = <<'eos';
 eos
 
 my $refactory = Devel::Refactor->new($verbose);
-my ($new_sub_call,$new_code) = $refactory->extract_subroutine('newSub',$code);
+my ($new_sub_call,$new_code) = $refactory->extract_subroutine('newSub',$code, 1);
 if ($verbose) {
     diag "new sub call:\n####\n$new_sub_call\n####";
     diag "new code:\n####\n$new_code\n####";

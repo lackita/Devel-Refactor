@@ -45,6 +45,7 @@ use warnings;
 use Cwd;
 use Devel::Refactor::ExtractMethod;
 use File::Basename;
+use File::Temp;
 
 our $VERSION = '0.06';
 
@@ -163,23 +164,7 @@ new sub name is prompted for via STDIN.
 
 sub extract_subroutine {
     my $self         = shift;
-    my $sub_name     = shift;
-    my $code_snippet = shift;
-    my $syntax_check = shift;
-
-    $DEBUG and print STDERR "sub name : $sub_name\n";
-    $DEBUG and print STDERR "snippet  : $code_snippet\n";
-    $self->{sub_name} = $sub_name;
-    $self->{code_snippet}  = $code_snippet;
-
-    my %vars = Devel::Refactor::ExtractMethod::_parse_vars($code_snippet);
-    my $local_and_loop_vars = Devel::Refactor::ExtractMethod::_parse_local_vars($code_snippet, \%vars);
-    my ($return_sub_call, $return_snippet) = $self->_transform_snippet($sub_name, $code_snippet, \%vars, $local_and_loop_vars->{local}, $local_and_loop_vars->{loop});
-
-     if ($syntax_check) {
-         $self->_syntax_check();
-     }
-     return ($return_sub_call, $return_snippet);
+	return Devel::Refactor::ExtractMethod::perform(@_);
 }
 
 =head2 rename_subroutine($where,$old_name,$new_name,[$max_depth])
@@ -420,225 +405,36 @@ sub perl_file_extensions {
 ###################################################################################
 ############################## Utility Methods ####################################
 
-sub _parse_vars {
-    my ($self, $code_snippet) = @_;
-
-    my $var;
-    my $hint;
-	my %vars;
-
-    # find the variables
-    while ( $code_snippet =~ /([\$\@]\w+?)(\W{1,2})/g ) {
-
-        $var  = $1;
-        $hint = $2;
-        if ( $hint =~ /^{/ ) {    #}/ 
-            $var =~ s/\$/\%/;
-			$vars{hash}{$var}++;
-        } elsif ( $hint =~ /^\[>/ ) {
-            $var =~ s/\$/\@/;
-			$vars{array}{$var}++;
-        } elsif ( $var =~ /^\@/ ){
-			$vars{array}{$var}++;
-        } elsif ( $var =~ /^\%/ ) {
-			$vars{hash}{$var}++;
-        } else {
-			$vars{scalar}{$var}++;
-        }
-    }
-
-	return %vars;
-}
-
-sub _parse_local_vars {
-    my ($self, $code_snippet, $vars) = @_;
-
-    my $reg;
-    my $reg2;
-    my $reg3;   # To find loops variables declared in for and foreach
-	my %local_vars;
-	my %loop_vars;
-
-    # figure out which are declared in the snippet
-    foreach my $var ( keys %{ $vars->{scalar} } ) {
-        $reg  = "\\s*my\\s*\\$var\\s*[=;\(]";
-        $reg2 = "\\s*my\\s*\\(.*?\\$var.*?\\)";
-        $reg3 = "(?:for|foreach)\\s+my\\s*\\$var\\s*\\(";
-
-        if ( $var =~ /(?:\$\d+$|\$[ab]$)/ ) {
-			$local_vars{scalar}{$var}++;
-        } elsif ( $code_snippet =~ /$reg|$reg2/ ) {
-			$local_vars{scalar}{$var}++;
-            # skip loop variables
-            if ( $code_snippet =~ /$reg3/ ) {
-				$loop_vars{scalar}{$var}++;
-            }
-        }
-    }
-    foreach my $var ( keys %{ $vars->{array}} ) {
-        $var =~ s/\$/\@/;
-        $reg  = "\\s*my\\s*\\$var\\s*[=;\(]";
-        $reg2 = "\\s*my\\s*\\(.*?\\$var.*?\\)";
-
-        if ( $code_snippet =~ /$reg|$reg2/ ) {
-			$local_vars{array}{$var}++;
-        }
-
-    }
-    foreach my $var ( keys %{ $vars->{hash}} ) {
-        $var =~ s/\$/\%/;
-        $reg  = "\\s*my\\s*\\$var\\s*[=;\(]";
-        $reg2 = "\\s*my\\s*\\(.*?\\$var.*?\\)";
-
-        if ( $code_snippet =~ /$reg|$reg2/ ) {
-			$local_vars{hash}{$var}++;
-        }
-    }
-
-	return {
-		local => \%local_vars,
-		loop => \%loop_vars,
-	};
-}
-
 
 sub _syntax_check{
-    my $self = shift;
-    my $tmp;
-    
-    my $eval_stmt = "my (". join ', ', @{$self->{parms}};
-    $eval_stmt .= ");\n";
-    $eval_stmt .= $self->get_sub_call();
-    $eval_stmt .= $self->get_new_code();
-    
-    $self->{eval_code} = $eval_stmt;
-    
-    eval " $eval_stmt ";
-    if ($@) {
-        $self->{eval_err} = $@;
-        
-        my @errs = split /\n/, $self->{eval_err};
-        my @tmp = split /\n/, $self->{return_snippet};
-        my $line;
-        foreach my $err (@errs){
-            if ($err =~ /line\s(\d+)/){
-                $line = ($1 - 3);
-                $tmp[$line] .= " #<--- ".$err;
-            }
-        }
-        $self->{return_snippet} = join "\n", @tmp;
-        
-    }
-    
-}
-
-sub _transform_snippet {
-    my ($self, $sub_name, $code_snippet, $vars, $local_vars, $loop_vars) = @_;
-
-    my $reg;
-    my $reg2;
-    my $arref;
-    my $href;
-	my @parms;
-	my @inner_retvals;
-	my @outer_retvals;
-
-    # Create a sub call that accepts all non-locally declared
-    # vars as parameters
-    foreach my $parm ( keys %{$vars->{scalar} } ) {
-        if ( !defined( $local_vars->{scalar}{$parm} ) ) {
-			push @parms, $parm;
-        } else {
-            # Don't return loop variables
-            next if grep $parm eq $_, keys %{$loop_vars->{scalar}};
-            if ( $parm !~ /\$\d+$/ ) {
-				push @inner_retvals, $parm;
-				push @outer_retvals, $parm;
-            }
-        }
-    }
-    foreach my $parm ( keys %{ $vars->{array}} ) {
-        $parm =~ s/\$/\@/;
-
-        if ( !defined( $local_vars->{array}->{$parm} ) ) {
-			push @parms, $parm;
-            $reg2 = "\\$parm";
-            ($arref = $parm) =~ s/\@/\$/;
-            $code_snippet =~ s/$reg2/\@$arref/g;
-
-            $parm =~ s/\@/\$/;
-            $reg = "\\$parm\\[";
-
-            $code_snippet =~ s/$reg/$parm\-\>\[/g;
-
-
-        } else {
-			push @inner_retvals, "\\$parm"; # \@array
-			push @outer_retvals, $parm;
-        }
-    }
-    foreach my $parm ( keys %{ $vars->{hash} }  ) {
-        $parm =~ s/\$/\%/;
-
-        if ( !defined( $local_vars->{hash}->{$parm} ) ) {
-			push @parms, $parm;
-            $reg2 = "\\$parm";
-            ($href = $parm) =~ s/\%/\$/;
-            $code_snippet =~ s/$reg2/\%$href/g;
-
-            $parm =~ s/\%/\$/;
-            $reg = "\\$parm\\{";
-
-            $code_snippet =~ s/$reg/$parm\-\>\{/g;
-        } else {
-			push @inner_retvals, "\\$parm"; # \%hash
-			push @outer_retvals, $parm;
-        }
-    }
-    my $retval;
-    my $return_call;
+    my ($self, $parms, $sub_call, $new_code) = @_;
     my $tmp;
 
-	if (scalar(@outer_retvals) > 0) {
-		$return_call .= "my ";
-		$return_call .= "(" if scalar(@outer_retvals) > 1;
-		$return_call .= join ', ', map {my $tmp; ($tmp = $_) =~ s/[\@\%](.*)/\$$1/; $tmp} sort @outer_retvals;
-		$return_call .= ")" if scalar(@outer_retvals) > 1;
-		$return_call .= " = ";
+    my $eval_stmt;
+	if (scalar(@$parms) > 0) {
+		$eval_stmt = "my (". join(', ', @{$parms}) . ");\n";
 	}
-	$return_call .= "$sub_name (";
-    $return_call .= join ', ',
-         map { ( $tmp = $_ ) =~ s/(\%|\@)(.*)/\\$1$2/; $tmp } @parms;
-    $return_call .= ");\n";
-    
-    $retval  = "sub $sub_name {\n";
-	$retval .= "\tmy (" . join(',', map {
-		($tmp = $_) =~ tr/%@/$/;$tmp
-	} @parms) . ") = \@_;\n" if scalar(@parms > 0);
+    $eval_stmt .= $sub_call;
+    $eval_stmt .= $new_code;
 
-	if (scalar(@outer_retvals) > 0 && scalar(@parms) > 0) {
-		$retval .= "\n";
+	my $new_code_file = File::Temp->new();
+	$new_code_file->print($eval_stmt);
+	$new_code_file->flush();
+	open(my $syntax_check, "-|", "perl -c $new_code_file 2>&1");
+	my @file_with_errors = split /\n/, $new_code;
+	while (my $err = <$syntax_check>) {
+		chomp($err);
+		if ($err =~ /line\s(\d+)/) {
+			my $line = ($1 - 3);
+			$err =~ s/at \S* line \d+, //;
+			$file_with_errors[$line] .= " #<--- ".$err;
+		}
 	}
-
-    $retval .= join("", map {"\t$_\n"} split /\n/, $code_snippet);
-	if (scalar(@outer_retvals > 0)) {
-		$retval .= "\treturn ";
-		$retval .= "(" if scalar(@outer_retvals) > 1;
-		$retval .= join ', ', sort @inner_retvals;
-		$retval .= ")" if scalar(@outer_retvals) > 1;
-		$retval .= ";\n";
-	}
-    $retval .= "}\n";
-
-    # protect quotes and dollar signs
-#    $retval =~ s/\"/\\"/g;
-#    $retval =~ s/(\$)/\\$1/g;
-    
-
-    $self->{return_snippet} = $retval;
-    $self->{return_sub_call} = $return_call;
-	return ($return_call, $retval);
+	close($syntax_check);
+	return join("\n", @file_with_errors);
 }
+
+
 
 
 # returns arrayref of hashrefs, or undef
