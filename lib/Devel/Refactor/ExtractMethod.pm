@@ -111,28 +111,14 @@ sub _parse_vars {
 
     # find the variables
     while ( $code_snippet =~ /([\$\@]\w+?)(\W{1,2})/g ) {
-        my $var  = Devel::Refactor::Var->new(name => $1);
-        my $hint = $2;
-        if ( _var_type($var->name(), $hint) eq 'hash' ) {
-            $var->{name} =~ s/\$/\%/;
-        } elsif ( _var_type($var->name(), $hint) eq 'array' ) {
-            $var->{name} =~ s/\$/\@/;
-		}
-		$vars{_var_type($var->name(), $hint)}{$var->name()} = 1;
+        my $var  = Devel::Refactor::Var->new(
+			name => $1,
+			hint => $2,
+		);
+		$vars{$var->type()}{$var->converted_name()} = $var;
     }
 
 	return %vars;
-}
-
-sub _var_type {
-	my ($var, $hint) = @_;
-	if ( $var =~ /^\%/ || $hint =~ /^{/ ) {
-		return 'hash';
-	} elsif ( $var =~ /^\@/ || $hint =~ /^\[/ ) {
-		return 'array';
-	} else {
-		return 'scalar';
-	}
 }
 
 sub _parse_local_vars {
@@ -146,16 +132,12 @@ sub _parse_local_vars {
 	my %local_vars;
 
     # figure out which are declared in the snippet
-	for my $type (qw(scalar array hash)) {
-		foreach my $var ( keys %{ $vars->{$type} } ) {
-			$var =~ s/\$/$var_type_replacement{$type}/;
-			my $escaped_var = "\\$var";
-
-			if ( $code_snippet =~ /\s*my\s*(\([^)]*?)?$escaped_var([^)]*?\))?/ ) {
-				$local_vars{$type}{$var}++;
+		foreach my $var ( map {values %$_} values %$vars ) {
+			my $name = $var->converted_name();
+			if ( $code_snippet =~ /\s*my\s*(\([^)]*?)?\Q$name\E([^)]*?\))?/ ) {
+				$local_vars{$var->type()}{$name} = $var;
 			}
 		}
-	}
 
 	return %local_vars;
 }
@@ -164,12 +146,11 @@ sub _parse_loop_vars {
 	my ($code_snippet, $vars) = @_;
 
 	my %loop_vars;
-	for my $var (keys %{$vars->{scalar}}) {
-		my $escaped_var = "\\$var";
-
-		# skip loop variables
-        if ( $code_snippet =~ /(?:for|foreach)\s+my\s*$escaped_var\s*\(/ ) {
-			$loop_vars{scalar}{$var}++;
+	for my $var (map {values %$_} values %$vars) {
+		next unless $var->type() eq 'scalar';
+		my $name = $var->converted_name();
+        if ( $code_snippet =~ /(?:for|foreach)\s+my\s*\Q$name\E\s*\(/ ) {
+			$loop_vars{scalar}{$var->name()}++;
         }
 	}
 

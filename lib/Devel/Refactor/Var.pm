@@ -7,6 +7,20 @@ use Moose;
 
 has name => (is => 'ro');
 has hint => (is => 'ro');
+has converted_name => (
+	is => 'rw',
+	lazy => 1,
+	default => sub {
+		my ($self) = @_;
+		my $name = $self->name();
+        if ( $self->type() eq 'hash' ) {
+            $name =~ s/\$/\%/;
+        } elsif ( $self->type() eq 'array' ) {
+            $name =~ s/\$/\@/;
+		}
+		return $name;
+	},
+);
 
 sub type {
 	my ($self) = @_;
