@@ -111,14 +111,14 @@ sub _parse_vars {
 
     # find the variables
     while ( $code_snippet =~ /([\$\@]\w+?)(\W{1,2})/g ) {
-        my $var  = $1;
+        my $var  = Devel::Refactor::Var->new(name => $1);
         my $hint = $2;
-        if ( _var_type($var, $hint) eq 'hash' ) {
-            $var =~ s/\$/\%/;
-        } elsif ( _var_type($var, $hint) eq 'array' ) {
-            $var =~ s/\$/\@/;
+        if ( _var_type($var->name(), $hint) eq 'hash' ) {
+            $var->{name} =~ s/\$/\%/;
+        } elsif ( _var_type($var->name(), $hint) eq 'array' ) {
+            $var->{name} =~ s/\$/\@/;
 		}
-		$vars{_var_type($var, $hint)}{$var}++;
+		$vars{_var_type($var->name(), $hint)}{$var->name()} = 1;
     }
 
 	return %vars;
