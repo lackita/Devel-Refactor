@@ -3,6 +3,8 @@ use strict;
 use warnings;
 no warnings 'uninitialized';
 
+use Devel::Refactor::Var;
+
 sub perform {
     my $sub_name     = shift;
     my $code_snippet = shift;
@@ -29,45 +31,37 @@ sub _transform_snippet {
 	my %local_vars = _parse_local_vars($code_snippet, \%vars);
 	my %loop_vars = _parse_loop_vars($code_snippet, \%vars);
 
-    # Create a sub call that accepts all non-locally declared
-    # vars as parameters
-    foreach my $parm ( keys %{$vars{scalar}} ) {
-        if ( !defined( $local_vars{scalar}{$parm} ) ) {
-			push @parms, $parm;
-        } else {
-            # Don't return loop variables
-            next if grep $parm eq $_, keys %{$loop_vars{scalar}};
-            if ( $parm !~ /\$\d+$/ ) {
-				push @inner_retvals, $parm;
-				push @outer_retvals, $parm;
-            }
-        }
-    }
 	my %var_type_replacement = (
 		scalar => '$',
 		hash => '%',
 		array => '@',
 	);
 
-	for my $type (qw(array hash)) {
+	for my $type (qw(scalar array hash)) {
 		foreach my $parm ( keys %{ $vars{$type} } ) {
 			$parm =~ s/\$/$var_type_replacement{$type}/;
 
 			if ( !defined( $local_vars{$type}->{$parm} ) ) {
 				push @parms, $parm;
-				$reg2 = "\\$parm";
-				(my $ref = $parm) =~ s/$var_type_replacement{$type}/\$/;
-				$code_snippet =~ s/$reg2/$var_type_replacement{$type}$ref/g;
 
-				$parm =~ s/$var_type_replacement{$type}/\$/;
-				$reg = "\\$parm";
+				if ($type ne 'scalar') {
+					$reg2 = "\\$parm";
+					(my $ref = $parm) =~ s/$var_type_replacement{$type}/\$/;
+					$code_snippet =~ s/$reg2/$var_type_replacement{$type}$ref/g;
 
-				$code_snippet =~ s/${reg}([[{])/$parm\-\>$1/g;
+					$parm =~ s/$var_type_replacement{$type}/\$/;
+					$reg = "\\$parm";
 
-
+					$code_snippet =~ s/${reg}([[{])/$parm\-\>$1/g;
+				}
 			}
-			else {
-				push @inner_retvals, "\\$parm"; # \@array
+			elsif (!$loop_vars{$type}{$parm}) {
+				if ($type eq 'scalar') {
+					push @inner_retvals, $parm;
+				}
+				else {
+					push @inner_retvals, "\\$parm";
+				}
 				push @outer_retvals, $parm;
 			}
 		}
