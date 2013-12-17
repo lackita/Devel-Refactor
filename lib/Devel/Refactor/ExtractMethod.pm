@@ -37,33 +37,32 @@ sub _transform_snippet {
 		array => '@',
 	);
 
-	for my $type (qw(scalar array hash)) {
-		foreach my $parm ( keys %{ $vars{$type} } ) {
-			$parm =~ s/\$/$var_type_replacement{$type}/;
+	foreach my $var ( map {values %$_} values %vars ) {
+		my $parm = $var->converted_name();
+		my $type = $var->type();
 
-			if ( !defined( $local_vars{$type}->{$parm} ) ) {
-				push @parms, $parm;
+		if ( !defined( $local_vars{$type}->{$parm} ) ) {
+			push @parms, $parm;
 
-				if ($type ne 'scalar') {
-					$reg2 = "\\$parm";
-					(my $ref = $parm) =~ s/$var_type_replacement{$type}/\$/;
-					$code_snippet =~ s/$reg2/$var_type_replacement{$type}$ref/g;
+			if ($type ne 'scalar') {
+				$reg2 = "\\$parm";
+				(my $ref = $parm) =~ s/$var_type_replacement{$type}/\$/;
+				$code_snippet =~ s/$reg2/$var_type_replacement{$type}$ref/g;
 
-					$parm =~ s/$var_type_replacement{$type}/\$/;
-					$reg = "\\$parm";
+				$parm =~ s/$var_type_replacement{$type}/\$/;
+				$reg = "\\$parm";
 
-					$code_snippet =~ s/${reg}([[{])/$parm\-\>$1/g;
-				}
+				$code_snippet =~ s/${reg}([[{])/$parm\-\>$1/g;
 			}
-			elsif (!$loop_vars{$type}{$parm}) {
-				if ($type eq 'scalar') {
-					push @inner_retvals, $parm;
-				}
-				else {
-					push @inner_retvals, "\\$parm";
-				}
-				push @outer_retvals, $parm;
+		}
+		elsif (!$loop_vars{$type}{$parm}) {
+			if ($type eq 'scalar') {
+				push @inner_retvals, $parm;
 			}
+			else {
+				push @inner_retvals, "\\$parm";
+			}
+			push @outer_retvals, $parm;
 		}
 	}
     my $retval;
@@ -124,11 +123,6 @@ sub _parse_vars {
 sub _parse_local_vars {
     my ($code_snippet, $vars) = @_;
 
-	my %var_type_replacement = (
-		scalar => '$',
-		hash => '%',
-		array => '@',
-	);
 	my %local_vars;
 
     # figure out which are declared in the snippet
@@ -147,11 +141,12 @@ sub _parse_loop_vars {
 
 	my %loop_vars;
 	for my $var (map {values %$_} values %$vars) {
-		next unless $var->type() eq 'scalar';
-		my $name = $var->converted_name();
-        if ( $code_snippet =~ /(?:for|foreach)\s+my\s*\Q$name\E\s*\(/ ) {
-			$loop_vars{scalar}{$var->name()}++;
-        }
+		if ($var->type() eq 'scalar') {
+			my $name = $var->converted_name();
+			if ( $code_snippet =~ /(?:for|foreach)\s+my\s*\Q$name\E\s*\(/ ) {
+				$loop_vars{$var->type()}{$var->name()} = $var;
+			}
+		}
 	}
 
 	return %loop_vars;
