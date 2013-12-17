@@ -25,7 +25,7 @@ sub _transform_snippet {
 	my @parms;
 	my @inner_retvals;
 	my @outer_retvals;
-	my %vars = _parse_vars($code_snippet);
+	my @vars = _parse_vars($code_snippet);
 
 	my %var_type_replacement = (
 		scalar => '$',
@@ -33,7 +33,7 @@ sub _transform_snippet {
 		array => '@',
 	);
 
-	foreach my $var ( map {values %$_} values %vars ) {
+	foreach my $var ( @vars ) {
 		my $parm = $var->converted_name();
 		my $name = $var->name();
 		my $prefix = $var->prefix();
@@ -106,10 +106,10 @@ sub _parse_vars {
 			name => $1,
 			hint => $2,
 		);
-		$vars{$var->type()}{$var->converted_name()} = $var;
+		$vars{$var->converted_name()} = $var;
     }
 
-	return %vars;
+	return values %vars;
 }
 
 sub _syntax_check{
