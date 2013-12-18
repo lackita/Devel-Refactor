@@ -3,104 +3,106 @@ use strict;
 use warnings;
 no warnings 'uninitialized';
 
+use Moose;
 use Devel::Refactor::Var;
 
+has 'sub_name' => (is => 'ro');
+has 'code_snippet' => (is => 'ro');
+has 'syntax_check' => (is => 'ro');
+
 sub perform {
-    my $sub_name     = shift;
-    my $code_snippet = shift;
-    my $syntax_check = shift;
+	my ($self) = @_;
 
-    my ($parms, $return_sub_call, $return_snippet) = _transform_snippet($sub_name, $code_snippet);
+	my $return_sub_call = $self->_sub_call($self->sub_name(), $self->code_snippet());
+	my $return_snippet = $self->_new_method($self->sub_name(), $self->code_snippet());
 
-     if ($syntax_check) {
-         $return_snippet = _syntax_check($parms, $return_sub_call, $return_snippet);
+     if ($self->syntax_check()) {
+         $return_snippet = $self->_mark_syntax_errors($return_sub_call, $return_snippet);
      }
+
      return ($return_sub_call, $return_snippet);
 }
 
+sub _sub_call {
+	my ($self) = @_;
 
-sub _transform_snippet {
-    my ($sub_name, $code_snippet) = @_;
-
-	my @parms;
-	my @inner_retvals;
-	my @outer_retvals;
-	my @vars = _parse_vars($code_snippet);
-
-	my %var_type_replacement = (
-		scalar => '$',
-		hash => '%',
-		array => '@',
-	);
-
-	foreach my $var ( @vars ) {
-		my $parm = $var->converted_name();
-		my $name = $var->name();
-		my $prefix = $var->prefix();
-
-		if ( !$var->is_local_to($code_snippet) ) {
-			push @parms, $var->converted_name();
-
-			if ($var->type() ne 'scalar') {
-				my $ref = '$' . substr($var->name(), 1);
-				$code_snippet =~ s/\Q$parm\E/$prefix$ref/g;
-				$code_snippet =~ s/\Q$ref\E([[{])/$ref\-\>$1/g;
-			}
-		}
-		elsif (!$var->is_iterator_in($code_snippet)) {
-			if ($var->type() eq 'scalar') {
-				push @inner_retvals, $var->converted_name();
-			}
-			else {
-				push @inner_retvals, "\\" . $var->converted_name();
-			}
-			push @outer_retvals, $var->converted_name();
-		}
-	}
-    my $retval;
-    my $return_call;
-    my $tmp;
-
-	if (scalar(@outer_retvals) > 0) {
+	my @return_vars = $self->_return_vars($self->code_snippet());
+	my @parameters = $self->_parameters_for($self->code_snippet());
+	my $return_call;
+	if (scalar(@return_vars) > 0) {
 		$return_call .= "my ";
-		$return_call .= "(" if scalar(@outer_retvals) > 1;
-		$return_call .= join ', ', map {my $tmp; ($tmp = $_) =~ s/[\@\%](.*)/\$$1/; $tmp} sort @outer_retvals;
-		$return_call .= ")" if scalar(@outer_retvals) > 1;
+		$return_call .= "(" if scalar(@return_vars) > 1;
+		$return_call .= join ', ', sort map {$_->scalar_name()} @return_vars;
+		$return_call .= ")" if scalar(@return_vars) > 1;
 		$return_call .= " = ";
 	}
-	$return_call .= "$sub_name (";
+	$return_call .= $self->sub_name() . " (";
     $return_call .= join ', ',
-         map { ( $tmp = $_ ) =~ s/(\%|\@)(.*)/\\$1$2/; $tmp } @parms;
+         map { $_->escaped_name() } @parameters;
     $return_call .= ");\n";
-    
-    $retval  = "sub $sub_name {\n";
-	$retval .= "\tmy (" . join(',', map {
-		($tmp = $_) =~ tr/%@/$/;$tmp
-	} @parms) . ") = \@_;\n" if scalar(@parms > 0);
+	return $return_call;
+}
 
-	if (scalar(@outer_retvals) > 0 && scalar(@parms) > 0) {
+sub _new_method {
+	my ($self) = @_;
+
+	my @return_vars = $self->_return_vars($self->code_snippet());
+	my @parameters = $self->_parameters_for($self->code_snippet());
+
+    my $retval = "sub " . $self->sub_name() . " {\n";
+	$retval .= "\tmy (" . join(',', map {
+		$_->scalar_name()
+	} @parameters) . ") = \@_;\n" if scalar(@parameters) > 0;
+
+	if (scalar(@return_vars) > 0 && scalar(@parameters) > 0) {
 		$retval .= "\n";
 	}
 
-    $retval .= join("", map {"\t$_\n"} split /\n/, $code_snippet);
-	if (scalar(@outer_retvals > 0)) {
+    $retval .= join("", map {"\t$_\n"} split /\n/, $self->code_snippet());
+	foreach my $var ( @parameters ) {
+		if ( !$var->is_local_to($self->code_snippet()) ) {
+			if ($var->type() ne 'scalar') {
+				my $parm = $var->converted_name();
+				my $prefix = $var->prefix();
+				my $ref = $var->scalar_name();
+				$retval =~ s/\Q$parm\E/$prefix$ref/g;
+				$retval =~ s/\Q$ref\E([[{])/$ref\-\>$1/g;
+			}
+		}
+	}
+
+	if (scalar(@return_vars > 0)) {
 		$retval .= "\treturn ";
-		$retval .= "(" if scalar(@outer_retvals) > 1;
-		$retval .= join ', ', sort @inner_retvals;
-		$retval .= ")" if scalar(@outer_retvals) > 1;
+		$retval .= "(" if scalar(@return_vars) > 1;
+		$retval .= join ', ', sort map {$_->escaped_name()} @return_vars;
+		$retval .= ")" if scalar(@return_vars) > 1;
 		$retval .= ";\n";
 	}
     $retval .= "}\n";
-
-	return (\@parms, $return_call, $retval);
 }
 
-sub _parse_vars {
-    my ($code_snippet) = @_;
+sub _return_vars {
+	my ($self) = @_;
+	return grep {
+		$_->is_local_to($self->code_snippet())
+		&& !$_->is_iterator_in($self->code_snippet())
+	} $self->_vars_for($self->code_snippet());
+}
+
+sub _parameters_for {
+	my ($self) = @_;
+	return grep {
+		!$_->is_local_to($self->code_snippet())
+	} $self->_vars_for($self->code_snippet());
+}
+
+sub _vars_for {
+    my ($self) = @_;
 
 	my %vars;
 
     # find the variables
+	my $code_snippet = $self->code_snippet();# have to use a temporary variable to appease looping over /.../g
     while ( $code_snippet =~ /([\$\@]\w+?)(\W{1,2})/g ) {
         my $var  = Devel::Refactor::Var->new(
 			name => $1,
@@ -112,14 +114,10 @@ sub _parse_vars {
 	return values %vars;
 }
 
-sub _syntax_check{
-    my ($parms, $sub_call, $new_code) = @_;
-    my $tmp;
+sub _mark_syntax_errors{
+    my ($self, $sub_call, $new_code) = @_;
 
     my $eval_stmt;
-	if (scalar(@$parms) > 0) {
-		$eval_stmt = "my (". join(', ', @{$parms}) . ");\n";
-	}
     $eval_stmt .= $sub_call;
     $eval_stmt .= $new_code;
 

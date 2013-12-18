@@ -7,20 +7,33 @@ use Moose;
 
 has name => (is => 'ro');
 has hint => (is => 'ro');
-has converted_name => (
-	is => 'rw',
-	lazy => 1,
-	default => sub {
-		my ($self) = @_;
-		my $name = $self->name();
-        if ( $self->type() eq 'hash' ) {
-            $name =~ s/\$/\%/;
-        } elsif ( $self->type() eq 'array' ) {
-            $name =~ s/\$/\@/;
-		}
-		return $name;
-	},
-);
+
+sub converted_name {
+	my ($self) = @_;
+	my $name = $self->name();
+	if ( $self->type() eq 'hash' ) {
+		$name =~ s/\$/\%/;
+	}
+	elsif ( $self->type() eq 'array' ) {
+		$name =~ s/\$/\@/;
+	}
+	return $name;
+}
+
+sub escaped_name {
+	my ($self) = @_;
+	if ($self->type() eq 'scalar') {
+		return $self->converted_name();
+	}
+	else {
+		return '\\' . $self->converted_name();
+	}
+}
+
+sub scalar_name {
+	my ($self) = @_;
+	return '$' . substr($self->converted_name(), 1);
+}
 
 sub prefix {
 	my ($self) = @_;

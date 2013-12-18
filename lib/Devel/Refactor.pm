@@ -163,9 +163,15 @@ new sub name is prompted for via STDIN.
 =cut
 
 sub extract_subroutine {
-    my $self         = shift;
-	return Devel::Refactor::ExtractMethod::perform(@_);
+    my ($self, $sub_name, $code_snippet, $syntax_check) = @_;
+	my $extract_method = Devel::Refactor::ExtractMethod->new(
+		sub_name => $sub_name,
+		code_snippet => $code_snippet,
+		syntax_check => $syntax_check,
+	);
+	return $extract_method->perform();
 }
+sub extract_method {extract_subroutine(@_)}# alternative name for those coming from Martin Fowler's "Refactoring"
 
 =head2 rename_subroutine($where,$old_name,$new_name,[$max_depth])
 
@@ -179,7 +185,7 @@ descendents (to I<max_depth> deep,) are searched.
 
 Default for I<max_depth> is 0 -- just the directory itself;
 I<max_depth> of 1 means the specified directory, and it's
-immeadiate sub-directories; I<max_depth> of 2 means the specified directory,
+immediate sub-directories; I<max_depth> of 2 means the specified directory,
 it's sub-directories, and their sub-directrories, and so forth.
 If you want to scan very deep, use a high number like 99.
 
@@ -404,37 +410,6 @@ sub perl_file_extensions {
 
 ###################################################################################
 ############################## Utility Methods ####################################
-
-
-sub _syntax_check{
-    my ($self, $parms, $sub_call, $new_code) = @_;
-    my $tmp;
-
-    my $eval_stmt;
-	if (scalar(@$parms) > 0) {
-		$eval_stmt = "my (". join(', ', @{$parms}) . ");\n";
-	}
-    $eval_stmt .= $sub_call;
-    $eval_stmt .= $new_code;
-
-	my $new_code_file = File::Temp->new();
-	$new_code_file->print($eval_stmt);
-	$new_code_file->flush();
-	open(my $syntax_check, "-|", "perl -c $new_code_file 2>&1");
-	my @file_with_errors = split /\n/, $new_code;
-	while (my $err = <$syntax_check>) {
-		chomp($err);
-		if ($err =~ /line\s(\d+)/) {
-			my $line = ($1 - 3);
-			$err =~ s/at \S* line \d+, //;
-			$file_with_errors[$line] .= " #<--- ".$err;
-		}
-	}
-	close($syntax_check);
-	return join("\n", @file_with_errors);
-}
-
-
 
 
 # returns arrayref of hashrefs, or undef
