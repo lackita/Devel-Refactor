@@ -8,6 +8,26 @@ use Moose;
 
 has perl_file_extensions => (is => 'ro');
 
+sub perform {
+    my ($self, $where, $old_name, $new_name, $max_depth) = @_;
+	$max_depth ||= 0;
+
+    return undef unless ($new_name and $old_name);
+
+    my $found = {};  # hashref of file names
+    if (-f $where){
+        # it's a file or filehandle
+        $found->{$where} = $self->_scan_file_for_string ($old_name,$new_name,$where);
+    } elsif ( -d $where ) {
+        # it's a directory or directory handle
+        $self->_scan_directory_for_string($old_name,$new_name,$where,$found,$max_depth);
+    } else {
+        # uh oh. Should we allow it to be a code snippet?
+        die "'$where' does not appear to be a file nor a directory."
+    }
+    return %$found ? $found : undef;
+}
+
 # Scan a directory, possibly recuring into sub-directories.
 sub _scan_directory_for_string {
     my ($self, $old_name,$new_name,$where,$hash,$depth) = @_;
