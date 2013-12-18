@@ -16,9 +16,7 @@ foreach my $fn (@perlfiles) {
 }
 ok (! $rf->is_perlfile('foo.t'), "'foo.t' rejected as Perl file name.");
 
-diag "Adding .t as valid Perl extension";
 my $perlfiles = $rf->perl_file_extensions(['.t']);
-# diag Dumper($perlfiles);
 ok($rf->is_perlfile('foo.t'), "'foo.t' recognized as Perl file name.");
 
 

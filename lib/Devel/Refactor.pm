@@ -44,6 +44,7 @@ use warnings;
 
 use Cwd;
 use Devel::Refactor::ExtractMethod;
+use Devel::Refactor::RenameMethod;
 use File::Basename;
 use File::Temp;
 
@@ -72,25 +73,7 @@ sub new {
     my $class        = shift;
     $DEBUG           = shift;
 
-    # TODO: Should these really be object properties? No harm I guess, but most
-    # of them are for the  extract_subroutine  method, and so maybe they
-    # should go in a data structure dedicated to that method?
     my $self = {
-        sub_name        => '',
-        code_snippet    => '',
-        return_snippet  => '',
-        return_sub_call => '',
-        eval_err        => '',
-        scalar_vars     => {},
-        array_vars      => {},
-        hash_vars       => {},
-        local_scalars   => {},
-        loop_scalars    => {},
-        local_arrays    => {},
-        local_hashes    => {},
-        parms           => [],
-        inner_retvals   => [],
-        outer_retvals   => [],
         perl_file_extensions       => { %perl_file_extensions },
     };
 
@@ -220,16 +203,20 @@ sub rename_subroutine {
     my $new_name       = shift;
     my $max_depth      = shift || 0;  # How many level to descend into directories
 
+	my $rename_method = Devel::Refactor::RenameMethod->new(
+		perl_file_extensions => $self->perl_file_extensions(),
+	);
+
     return undef unless ($new_name and $old_name);
 
     $DEBUG and warn "Looking for $where in ",  getcwd(), "\n";
     my $found = {};  # hashref of file names
     if (-f $where){
         # it's a file or filehandle
-        $found->{$where} = $self->_scan_file_for_string ($old_name,$new_name,$where);
+        $found->{$where} = $rename_method->_scan_file_for_string ($old_name,$new_name,$where);
     } elsif ( -d $where ) {
         # it's a directory or directory handle
-        $self->_scan_directory_for_string($old_name,$new_name,$where,$found,$max_depth);
+        $rename_method->_scan_directory_for_string($old_name,$new_name,$where,$found,$max_depth);
     } else {
         # uh oh. Should we allow it to be a code snippet?
         die "'$where' does not appear to be a file nor a directory."
@@ -407,64 +394,6 @@ sub perl_file_extensions {
 =back
 
 =cut
-
-###################################################################################
-############################## Utility Methods ####################################
-
-
-# returns arrayref of hashrefs, or undef
-sub _scan_file_for_string {
-    my $self          = shift;
-    my $old_name      = shift;
-    my $new_name      = shift;
-    my $file          = shift;
-
-    my $fh;
-    
-    open $fh, "$file"
-          || die("Could not open code file '$file' - $!");
-
-    my $line_number = 0;
-    my @lines;
-    my $regex1 = '(\W)(' . $old_name . ')(\W)'; # Surrounded by non-word characters
-    my $regex2 = "^$old_name(" . '\W)';  # At start of line
-    while (<$fh>) {
-        $line_number++;
-        # Look for $old_name surrounded by non-word characters, or at start of line
-        if (/$regex1/o or /$regex2/o) {
-            my $new_line = $_;
-            $new_line =~ s/$regex1/$1$new_name$3/g;
-            $new_line =~ s/$regex2/$new_name$1/;
-            my $hash = {$line_number => $new_line};
-            push @lines, $hash;
-        }
-    }
-    close $fh;
-    return @lines ? \@lines : undef;
-}
-
-# Scan a directory, possibly recuring into sub-directories.
-sub _scan_directory_for_string {
-    my ($self,$old_name,$new_name,$where,$hash,$depth) = @_;
-    my $dh;
-    opendir $dh, $where ||
-       die "Could not open directory '$where': $!";
-    my @files = grep { $_ ne '.' and $_ ne '..' } readdir $dh;
-    close $dh;
-    $depth--;
-    foreach my $file (@files) {
-        $file = "$where/$file";  # add the directory back on to the path
-        if (-f $file && $self->is_perlfile($file)) {
-            $hash->{$file} = $self->_scan_file_for_string($old_name,$new_name,$file);
-        }
-        if (-d $file && $depth >= 0) {
-            # It's a directory, so call this method on the directory.
-            $self->_scan_directory_for_string($old_name,$new_name,$file,$hash,$depth);
-        }
-    }
-    return $hash;
-}
-
 
 1; # File must return true when compiled. Keep Perl happy, snuggly and warm.
 
