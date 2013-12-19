@@ -197,11 +197,7 @@ new line, with I<old_name> changed to I<new_name>.
 =cut
 
 sub rename_subroutine {
-    my $self           = shift;
-    my $where          = shift;
-    my $old_name       = shift;
-    my $new_name       = shift;
-    my $max_depth      = shift || 0;  # How many level to descend into directories
+    my ($self, $where, $old_name, $new_name, $max_depth) = @_;
 
 	my $rename_method = Devel::Refactor::RenameMethod->new(
 		perl_file_extensions => $self->perl_file_extensions(),
@@ -209,6 +205,7 @@ sub rename_subroutine {
 
 	return $rename_method->perform($where, $old_name, $new_name, $max_depth);
 }
+sub rename_method {rename_subroutine(@_)}
 
 =head2 is_perlfile($filename)
 

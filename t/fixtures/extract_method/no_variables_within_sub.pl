@@ -1,0 +1,3 @@
+sub oldSub {
+	print 'foo';
+}
