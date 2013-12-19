@@ -9,6 +9,10 @@ use Devel::Refactor::Var;
 has 'sub_name' => (is => 'ro');
 has 'code_snippet' => (is => 'ro');
 has 'syntax_check' => (is => 'ro');
+has 'after_call' => (
+	is => 'ro',
+	default => sub {''},
+);
 
 sub perform {
 	my ($self) = @_;
@@ -86,6 +90,7 @@ sub _return_vars {
 	return grep {
 		$_->is_local_to($self->code_snippet())
 		&& !$_->is_iterator_in($self->code_snippet())
+		&& $_->name() =~ $self->after_call()
 	} $self->_vars_for($self->code_snippet());
 }
 

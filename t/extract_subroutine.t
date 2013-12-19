@@ -5,6 +5,7 @@ use Test::More;
 use Test::Differences;
 
 use Devel::Refactor;
+use Devel::Refactor::ExtractMethod;
 
 extract_correct('newSub', "print 'foo';", "newSub ();\n",
 q{sub newSub {
@@ -40,6 +41,19 @@ q{sub newSub {
 	my ($foo) = @_;
 	$foo->[0] = 1;
 	@$foo = (1);
+}});
+
+my $extractor = Devel::Refactor::ExtractMethod->new(
+	sub_name => 'newSub',
+	code_snippet => 'my $foo = "bar";',
+	after_call => 'print "foo";',
+	syntax_check => 1,
+);
+my ($call, $sub) = $extractor->perform();
+is($call, "newSub ();\n");
+eq_or_diff($sub,
+q{sub newSub {
+	my $foo = "bar";
 }});
 
 done_testing();
