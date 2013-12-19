@@ -152,9 +152,8 @@ sub extract_subroutine {
 		code_snippet => $code_snippet,
 		syntax_check => $syntax_check,
 	);
-	return $extract_method->perform();
+	return ($extract_method->sub_call(), $extract_method->new_method());
 }
-sub extract_method {extract_subroutine(@_)}# alternative name for those coming from Martin Fowler's "Refactoring"
 
 =head2 rename_subroutine($where,$old_name,$new_name,[$max_depth])
 
@@ -205,7 +204,6 @@ sub rename_subroutine {
 
 	return $rename_method->perform($where, $old_name, $new_name, $max_depth);
 }
-sub rename_method {rename_subroutine(@_)}
 
 =head2 is_perlfile($filename)
 

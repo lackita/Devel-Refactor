@@ -8,26 +8,12 @@ use Devel::Refactor::Var;
 
 has 'sub_name' => (is => 'ro');
 has 'code_snippet' => (is => 'ro');
-has 'syntax_check' => (is => 'ro');
 has 'after_call' => (
 	is => 'ro',
 	default => sub {''},
 );
 
-sub perform {
-	my ($self) = @_;
-
-	my $return_sub_call = $self->_sub_call($self->sub_name(), $self->code_snippet());
-	my $return_snippet = $self->_new_method($self->sub_name(), $self->code_snippet());
-
-     if ($self->syntax_check()) {
-         $return_snippet = $self->_mark_syntax_errors($return_sub_call, $return_snippet);
-     }
-
-     return ($return_sub_call, $return_snippet);
-}
-
-sub _sub_call {
+sub sub_call {
 	my ($self) = @_;
 
 	my @return_vars = $self->_return_vars($self->code_snippet());
@@ -47,7 +33,7 @@ sub _sub_call {
 	return $return_call;
 }
 
-sub _new_method {
+sub new_method {
 	my ($self) = @_;
 
 	my @return_vars = $self->_return_vars($self->code_snippet());
@@ -83,6 +69,8 @@ sub _new_method {
 		$retval .= ";\n";
 	}
     $retval .= "}\n";
+
+	return $self->_mark_syntax_errors($retval);
 }
 
 sub _return_vars {
@@ -120,10 +108,9 @@ sub _vars_for {
 }
 
 sub _mark_syntax_errors{
-    my ($self, $sub_call, $new_code) = @_;
+    my ($self, $new_code) = @_;
 
     my $eval_stmt;
-    $eval_stmt .= $sub_call;
     $eval_stmt .= $new_code;
 
 	my $new_code_file = File::Temp->new();
@@ -134,7 +121,7 @@ sub _mark_syntax_errors{
 	while (my $err = <$syntax_check>) {
 		chomp($err);
 		if ($err =~ /line\s(\d+)/) {
-			my $line = ($1 - 3);
+			my $line = ($1 - 2);
 			$err =~ s/at \S* line \d+, //;
 			$file_with_errors[$line] .= " #<--- ".$err;
 		}

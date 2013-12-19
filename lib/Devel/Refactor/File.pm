@@ -26,12 +26,11 @@ sub extract_method {
 		code_snippet => substr($self->contents(), $start, $length),
 		syntax_check => 1,
 	);
-	my ($call, $sub) = $extractor->perform();
 
 	$self->contents(join("",
 		$self->_before_call($start),
-		$call,
-		$self->_after_call($start, $length, $sub),
+		$extractor->sub_call(),
+		$self->_after_call($start, $length, $extractor->new_method()),
 	));
 
 	$self->_write_back_to_file();
