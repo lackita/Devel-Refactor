@@ -72,4 +72,10 @@ sub is_iterator_in {
 	return $self->type() eq 'scalar' && $code_snippet =~ /(?:for|foreach)\s+my\s*\Q$name\E\s*\(/;
 }
 
+sub referenced_in {
+	my ($self, $code_snippet) = @_;
+	my $name = $self->name();
+	return $code_snippet =~ /$name/;
+}
+
 1;

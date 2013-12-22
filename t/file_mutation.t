@@ -28,7 +28,7 @@ sub method_extracted_correctly {
 
 	$file_converter->extract_method('newSub', $start, $length);
 	eq_or_diff(
-		scalar(read_file($file_converter->path())),
+		scalar(read_file($file_converter->refactored_path())),
 		scalar(read_file(_path_for_fixture_file("${name}_refactored"))),
 	);
 }

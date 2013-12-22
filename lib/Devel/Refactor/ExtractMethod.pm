@@ -78,7 +78,7 @@ sub _return_vars {
 	return grep {
 		$_->is_local_to($self->code_snippet())
 		&& !$_->is_iterator_in($self->code_snippet())
-		&& $_->name() =~ $self->after_call()
+		&& (!$self->after_call() || $_->referenced_in($self->after_call()))
 	} $self->_vars_for($self->code_snippet());
 }
 

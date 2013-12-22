@@ -7,76 +7,110 @@ use Test::Differences;
 use Devel::Refactor;
 use Devel::Refactor::ExtractMethod;
 
-call_is("print 'foo';", "newSub ();\n");
-sub_is("print 'foo';",
+call_is(
+	code => "print 'foo';",
+	expected_call => "newSub ();\n",
+);
+sub_is(
+	code => "print 'foo';",
+	expected_sub =>
 q{sub newSub {
 	print 'foo';
-}});
+}},
+);
 
-call_is('print $foo;', "newSub (\$foo);\n");
-sub_is('print $foo;',
+call_is(
+	code => 'print $foo;',
+	expected_call => "newSub (\$foo);\n",
+);
+sub_is(
+	code => 'print $foo;',
+	expected_sub =>
 q{sub newSub {
 	my ($foo) = @_;
 	print $foo;
-}});
+}},
+);
 
-call_is('my $foo = 1;', "my \$foo = newSub ();\n");
-sub_is('my $foo = 1;', 
+call_is(
+	code => 'my $foo = 1;',
+	expected_call => "my \$foo = newSub ();\n",
+);
+sub_is(
+	code => 'my $foo = 1;', 
+	expected_sub =>
 q{sub newSub {
 	my $foo = 1;
 	return $foo;
-}});
+}},
+);
 
-call_is('(', "newSub ();\n",);
-sub_is('(',
+call_is(
+	code => '(',
+	expected_call => "newSub ();\n",,
+);
+sub_is(
+	code => '(',
+	expected_sub =>
 q{sub newSub {
 	( #<--- syntax error near "(
-}});
+}},
+);
 
-call_is("\$foo{1} = 2;\n\%foo = (1 => 2);", "newSub (\\\%foo);\n");
-sub_is("\$foo{1} = 2;\n\%foo = (1 => 2);",
+call_is(
+	code => "\$foo{1} = 2;\n\%foo = (1 => 2);",
+	expected_call => "newSub (\\\%foo);\n",
+);
+sub_is(
+	code => "\$foo{1} = 2;\n\%foo = (1 => 2);",
+	expected_sub =>
 q{sub newSub {
 	my ($foo) = @_;
 	$foo->{1} = 2;
 	%$foo = (1 => 2);
-}});
+}},
+);
 
-call_is("\$foo[0] = 1;\n\@foo = (1);", "newSub (\\\@foo);\n");
-sub_is("\$foo[0] = 1;\n\@foo = (1);",
+call_is(
+	code => "\$foo[0] = 1;\n\@foo = (1);",
+	expected_call => "newSub (\\\@foo);\n",
+);
+sub_is(
+	code => "\$foo[0] = 1;\n\@foo = (1);",
+	expected_sub =>
 q{sub newSub {
 	my ($foo) = @_;
 	$foo->[0] = 1;
 	@$foo = (1);
-}});
+}},
+);
 
-call_is('my $foo = "bar";', 'print "foo";', "newSub ();\n");
-sub_is('my $foo = "bar";', 'print "foo";',
+call_is(
+	code => 'my $foo = "bar";',
+	after_call => 'print "foo";',
+	expected_call => "newSub ();\n",
+);
+sub_is(
+	code => 'my $foo = "bar";',
+	after_call => 'print "foo";',
+	expected_sub =>
 q{sub newSub {
 	my $foo = "bar";
-}});
+}}
+);
 
 done_testing();
 
 sub call_is {
-	my ($code, $after_call, $expected_call) = @_;
+	my (%args) = @_;
 
-	unless ($expected_call) {
-		$expected_call = $after_call;
-		$after_call = '';
-	}
-
-	is(_extractor($code, $after_call)->sub_call(), $expected_call);
+	is(_extractor($args{code}, $args{after_call})->sub_call(), $args{expected_call});
 }
 
 sub sub_is {
-	my ($code, $after_call, $expected_code) = @_;
+	my (%args) = @_;
 
-	unless ($expected_code) {
-		$expected_code = $after_call;
-		$after_call = '';
-	}
-
-	eq_or_diff(_extractor($code, $after_call)->new_method(), $expected_code);
+	eq_or_diff(_extractor($args{code}, $args{after_call})->new_method(), $args{expected_sub});
 }
 
 sub _extractor {
@@ -85,7 +119,7 @@ sub _extractor {
 	return Devel::Refactor::ExtractMethod->new(
 		sub_name => 'newSub',
 		code_snippet => $code,
-		after_call => $after_call,
+		after_call => $after_call || '',
 		syntax_check => 1,
 	);
 }
