@@ -1,0 +1,5 @@
+1a2,5
+> 	newSub ();
+> }
+> 
+> sub newSub {

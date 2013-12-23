@@ -20,20 +20,20 @@ done_testing();
 
 sub method_extracted_correctly {
 	my ($name, $start, $length) = @_;
-	my $file = File::Temp->new();
-	copy(_path_for_fixture_file($name), $file->filename());
+	my $tempdir = File::Temp->newdir();
+	copy(_path_for_fixture_file($name, "pl"), "$tempdir/test.pl");
 	my $file_converter = Devel::Refactor::File->new(
-		path => $file->filename(),
+		path => "$tempdir/test.pl",
 	);
 
 	$file_converter->extract_method('newSub', $start, $length);
 	eq_or_diff(
-		scalar(read_file($file_converter->refactored_path())),
-		scalar(read_file(_path_for_fixture_file("${name}_refactored"))),
+		scalar(read_file("$tempdir/refactor.patch")),
+		scalar(read_file(_path_for_fixture_file($name, "patch"))),
 	);
 }
 
 sub _path_for_fixture_file {
-	my ($name) = @_;
-	return "t/fixtures/extract_method/$name.pl";
+	my ($name, $extension) = @_;
+	return "t/fixtures/extract_method/$name.$extension";
 }

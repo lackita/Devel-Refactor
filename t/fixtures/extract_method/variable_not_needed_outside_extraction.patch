@@ -1,0 +1,8 @@
+1c1,5
+< my $foo = 'bar';
+---
+> newSub ();
+> 
+> sub newSub {
+> 	my $foo = 'bar';
+> }

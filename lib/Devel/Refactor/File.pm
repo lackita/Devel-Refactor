@@ -2,20 +2,13 @@ package Devel::Refactor::File;
 use strict;
 use warnings;
 
+use File::Basename;
 use File::Slurp;
 use Devel::Refactor;
 use Devel::Refactor::ExtractMethod;
 use Moose;
 
 has path => (is => 'rw');
-has refactored_path => (
-	is => 'rw',
-	lazy => 1,
-	default => sub {
-		my ($self) = @_;
-		return $self->path() . '.rfd',
-	},
-);
 has contents => (
 	is => 'rw',
 	lazy => 1,
@@ -63,9 +56,11 @@ sub _after_call {
 
 sub _write_back_to_file {
 	my ($self) = @_;
-	open FILE, '>', $self->refactored_path();
-	print FILE $self->contents();
-	close FILE;
+	my $path = $self->path();
+	my $patch = dirname($path) . "/refactor.patch";
+	open PATCH, '|-', "diff $path - > $patch";
+	print PATCH $self->contents();
+	close PATCH;
 }
 
 1;
