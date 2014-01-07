@@ -5,12 +5,17 @@ no warnings 'uninitialized';
 
 use Moose;
 
-has name => (is => 'ro');
+has variable_name => (is => 'ro');
 has hint => (is => 'ro');
+
+sub name {
+	my ($self) = @_;
+	return substr($self->variable_name(), 1);
+}
 
 sub converted_name {
 	my ($self) = @_;
-	my $name = $self->name();
+	my $name = $self->variable_name();
 	if ( $self->type() eq 'hash' ) {
 		$name =~ s/\$/\%/;
 	}
@@ -50,9 +55,9 @@ sub prefix {
 
 sub type {
 	my ($self) = @_;
-	if ( $self->name() =~ /^\%/ || $self->hint() =~ /^{/ ) {
+	if ( $self->variable_name() =~ /^\%/ || $self->hint() =~ /^{/ ) {
 		return 'hash';
-	} elsif ( $self->name() =~ /^\@/ || $self->hint() =~ /^\[/ ) {
+	} elsif ( $self->variable_name() =~ /^\@/ || $self->hint() =~ /^\[/ ) {
 		return 'array';
 	} else {
 		return 'scalar';
@@ -74,7 +79,7 @@ sub is_iterator_in {
 
 sub referenced_in {
 	my ($self, $code_snippet) = @_;
-	my $name = $self->name();
+	my $name = $self->variable_name();
 	return $code_snippet =~ /$name/;
 }
 
