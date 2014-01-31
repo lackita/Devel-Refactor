@@ -401,10 +401,12 @@ __END__
 =head1 AUTHOR
 
 Scott Sotka, E<lt>ssotka@barracudanetworks.comE<gt>
+Colin Williams, E<lt>lackita@gmail.comE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
 Copyright 2005 by Scott Sotka
+Copyright 2014 by Colin Williams
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself. 
