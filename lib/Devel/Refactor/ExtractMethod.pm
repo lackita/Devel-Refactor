@@ -21,9 +21,8 @@ has 'args_hash' => (
 sub sub_call {
 	my ($self) = @_;
 
-	my @return_vars = $self->_return_vars($self->code_snippet());
-	my @parameters = $self->_parameters_for($self->code_snippet());
 	my $return_call;
+	my @return_vars = $self->_return_vars($self->code_snippet());
 	if (scalar(@return_vars) > 0) {
 		$return_call .= "my ";
 		$return_call .= "(" if scalar(@return_vars) > 1;
@@ -31,6 +30,8 @@ sub sub_call {
 		$return_call .= ")" if scalar(@return_vars) > 1;
 		$return_call .= " = ";
 	}
+
+	my @parameters = $self->_parameters_for($self->code_snippet());
 	$return_call .= $self->sub_name() . " (";
 	if ($self->args_hash()) {
 		$return_call .= join(', ', map {$_->name() . " => " . $_->scalar_name()} @parameters);

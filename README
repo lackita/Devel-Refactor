@@ -1,18 +1,40 @@
-Devel/Refactor version 0.04
-=========================
+Devel/Refactor version 0.06
+===========================
+The Devel::Refactor module is for code refactoring.  Give it a file and the
+desired refactoring, and it will create a patch file describing the changes
+needed to perform that refactoring.
 
-The Devel::Refactor module is for code refactoring.  Pass it a
-a snippet of Perl code that belongs in its own subroutine as
-well as a name for that sub.  It figures out which variables
-need to be passed into the sub, and which variables might be
-passed back.  It then produces the sub along with a call to
-the sub.
+Supported Refactorings
+======================
 
-Included in this module is an example script that pulls the
-snippet of code from the KDE clipboard in Linux and passes 
-back the transformed code the same way.
+extract method
+--------------
+Let's say you want to extract the code in Foo.pm, starting at character 200,
+going for 20 cahracters, and called bar:
+
+	refactor.pl Foo.pm extract_method bar 200 20
+
+This will produce a file in your current directory called refactor.patch, which
+will describe the changes needed to perform that refactoring.
+
+Editor Support
+==============
+Check out the editors directory for extensions for various editors:
+
+emacs
+-----
+editors/emacs/perl-refactor.el
+
+	(require 'perl-refactor)
+
+Mark a region that you want to refactor and do the following:
+
+	M-x perl-refactor RET <new name> RET
+
+This will apply the patch and show you the diff of what happened.
 
 INSTALLATION
+============
 
 To install this module type the following:
 
@@ -22,13 +44,15 @@ To install this module type the following:
    make install
 
 DEPENDENCIES
+============
 
-None.
+Moose
 
 COPYRIGHT AND LICENCE
 
 
 Copyright (C) 2005 Scott Sotka
+Copyright (C) 2014 Colin Williams
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself. 

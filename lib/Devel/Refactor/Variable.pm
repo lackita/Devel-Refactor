@@ -1,4 +1,4 @@
-package Devel::Refactor::Var;
+package Devel::Refactor::Variable;
 use strict;
 use warnings;
 no warnings 'uninitialized';
