@@ -10,7 +10,22 @@ Devel::Refactor - Perl extension for refactoring Perl code.
 
 $Revision: $  This is the CVS revision number.
 
-=head1 SYNOPSIS
+=head1 File Interface
+
+=head2 extract method
+
+Let's say you want to extract the code in Foo.pm, starting at character 200,
+going for 20 characters, and called bar:
+
+	refactor.pl Foo.pm extract_method bar 200 20
+
+This will produce a file in your current directory called refactor.patch, which
+will describe the changes needed to perform that refactoring.
+
+
+=head1 Programmatic Interface
+
+=head2 SYNOPSIS
 
   use Devel::Refactor;
   
@@ -24,11 +39,11 @@ $Revision: $  This is the CVS revision number.
   # $files_to_change is a hashref where keys are file names, and values are
   # arrays of hashes with line_number => new_text
   
-=head1 ABSTRACT
+=head2 ABSTRACT
 
 Perl module that facilitates refactoring Perl code.  
 
-=head1 DESCRIPTION
+=head2 DESCRIPTION
 
 The B<Devel::Refactor> module is for code refactoring. 
 
@@ -58,11 +73,11 @@ our %perl_file_extensions = (
     '\.pod$' => 1,
 );
 
-=head1 CLASS METHODS
+=head2 CLASS METHODS
 
 Just the constructor for now.
 
-=head2 new
+=head3 new
 
 Returns a new B<Devel::Refactor> object.
 
@@ -84,11 +99,11 @@ sub new {
 
 
 
-=head1 PUBLIC OBJECT METHODS
+=head2 PUBLIC OBJECT METHODS
 
 Call on a object returned by new().
 
-=head2 extract_subroutine($new_name,$old_code [,$syntax_check])
+=head3 extract_subroutine($new_name,$old_code [,$syntax_check])
 
 Pass it a snippet of Perl code that belongs in its own subroutine as
 well as a name for that sub.  It figures out which variables
@@ -155,7 +170,7 @@ sub extract_subroutine {
 	return ($extract_method->sub_call(), $extract_method->new_method());
 }
 
-=head2 rename_subroutine($where,$old_name,$new_name,[$max_depth])
+=head3 rename_subroutine($where,$old_name,$new_name,[$max_depth])
 
 I<where> is one of:
   path-to-file
@@ -205,7 +220,7 @@ sub rename_subroutine {
 	return $rename_method->perform($where, $old_name, $new_name, $max_depth);
 }
 
-=head2 is_perlfile($filename)
+=head3 is_perlfile($filename)
 
 Takes a filename or path and returns true if the file has one of the
 extensions in B<perl_file_extensions>, otherwise returns false.
@@ -217,7 +232,7 @@ sub is_perlfile {
     return $suffix;
 }
 
-=head1 OBJECT ACCESSORS
+=head2 OBJECT ACCESSORS
 
 These object methods return various data structures that may be stored
 in a B<Devel::Refactor> object. In some cases the method also allows
@@ -225,7 +240,7 @@ setting the property, e.g. B<perl_file_extensions>.
 
 =cut
 
-=head2 get_new_code
+=head3 get_new_code
 
 Returns the I<return_snippet> object property.
 
@@ -236,7 +251,7 @@ sub get_new_code{
     return $self->{return_snippet};
 }
 
-=head2 get_eval_results
+=head3 get_eval_results
 
 Returns the I<eval_err> object property.
 
@@ -248,7 +263,7 @@ sub get_eval_results{
 }
 
 
-=head2 get_sub_call
+=head3 get_sub_call
 
 Returns the I<return_sub_call> object property.
 
@@ -260,38 +275,41 @@ sub get_sub_call{
 }
 
 
-=head2 get_scalars
+=head3 get_scalars
 
 Returns an array of the keys from I<scalar_vars> object property.
 =cut
+
 sub get_scalars {
     my $self = shift;
 
     return sort keys %{ $self->{scalar_vars} };
 }
 
-=head2 get_arrays
+=head3 get_arrays
 
 Returns an array of the keys from the I<array_vars> object property.
 =cut
+
 sub get_arrays {
     my $self = shift;
 
     return sort keys %{ $self->{array_vars} };
 }
 
-=head2 get_hashes
+=head3 get_hashes
 
 Returns an array of the keys from the I<hash_vars> object property.
 
 =cut
+
 sub get_hashes {
     my $self = shift;
 
     return sort keys %{ $self->{hash_vars} };
 }
 
-=head2 get_local_scalars
+=head3 get_local_scalars
 
 Returns an array of the keys from the I<local_scalars> object property.
 
@@ -302,7 +320,7 @@ sub get_local_scalars {
     return sort keys %{ $self->{local_scalars} };
 }
 
-=head2 get_local_arrays
+=head3 get_local_arrays
 
 Returns an array of the keys from the I<local_arrays> object property.
 
@@ -313,7 +331,7 @@ sub get_local_arrays {
     return sort keys %{ $self->{local_arrays} };
 }
 
-=head2 get_local_hashes
+=head3 get_local_hashes
 
 Returns an array of the keys from the I<local_hashes> object property.
 
@@ -325,7 +343,7 @@ sub get_local_hashes {
     return sort keys %{ $self->{local_hashes} };
 }
 
-=head2 perl_file_extensions([$arrayref|$hashref])
+=head3 perl_file_extensions([$arrayref|$hashref])
 
 Returns a hashref where the keys are regular expressions that match filename
 extensions that we think are for Perl files. Default are C<.pl>,
@@ -362,7 +380,7 @@ sub perl_file_extensions {
 }
 
 
-=head1 TODO LIST
+=head2 TODO LIST
 
 =over 2
 

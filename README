@@ -10,7 +10,7 @@ Supported Refactorings
 extract method
 --------------
 Let's say you want to extract the code in Foo.pm, starting at character 200,
-going for 20 cahracters, and called bar:
+going for 20 characters, and called bar:
 
 	refactor.pl Foo.pm extract_method bar 200 20
 
