@@ -12,16 +12,20 @@ $Revision: $  This is the CVS revision number.
 
 =head1 File Interface
 
+These will produce a file in your current directory called refactor.patch when
+the provided script refactor.pl is called.
+
+After performing each of these refactorings, the modified file is run through
+perltidy.  Make sure you have a .perltidyrc file set up, or else applying the
+patch file from a refactoring will probably reformat your code in an undesirable
+way.
+
 =head2 extract method
 
-Let's say you want to extract the code in Foo.pm, starting at character 200,
-going for 20 characters, and called bar:
+Extract the code in Foo.pm to a method called bar, starting at character 200,
+and 20 characters long:
 
 	refactor.pl Foo.pm extract_method bar 200 20
-
-This will produce a file in your current directory called refactor.patch, which
-will describe the changes needed to perform that refactoring.
-
 
 =head1 Programmatic Interface
 

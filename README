@@ -7,6 +7,11 @@ needed to perform that refactoring.
 Supported Refactorings
 ======================
 
+After performing each of these refactorings, the modified file is run through
+perltidy.  Make sure you have a .perltidyrc file set up, or else applying the
+patch file from a refactoring will probably reformat your code in an undesirable
+way.
+
 extract method
 --------------
 Let's say you want to extract the code in Foo.pm, starting at character 200,
