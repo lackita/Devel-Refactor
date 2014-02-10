@@ -8,6 +8,7 @@ WriteMakefile(
     'PREREQ_PM'		=> {
                                'Test::More' => '.47',
 							   'Moose' => '2.0205',
+							   'Perl::Tidy' => '1.74',
                            }, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?    ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM => 'Refactor.pm', # retrieve abstract from module

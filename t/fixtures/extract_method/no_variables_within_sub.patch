@@ -1,5 +1,8 @@
-1a2,5
-> 	newSub ();
+2c2,6
+< 	print 'foo';
+---
+>     newSub();
 > }
 > 
 > sub newSub {
+>     print 'foo';

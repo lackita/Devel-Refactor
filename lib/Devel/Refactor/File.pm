@@ -7,6 +7,7 @@ use File::Slurp;
 use Devel::Refactor;
 use Devel::Refactor::ExtractMethod;
 use Moose;
+use Perl::Tidy;
 
 has path => (is => 'rw');
 has contents => (
@@ -28,11 +29,19 @@ sub extract_method {
 		syntax_check => 1,
 	);
 
-	$self->contents(join("",
+	my $new_contents = join("",
 		$self->_before_call($start),
 		$extractor->sub_call(),
 		$self->_after_call($start, $length, $extractor->new_method()),
-	));
+	);
+
+	my $tidied_contents;
+	Perl::Tidy::perltidy(
+		source => \$new_contents,
+		destination => \$tidied_contents,
+	);
+
+	$self->contents($tidied_contents);
 
 	$self->_write_back_to_file();
 }
